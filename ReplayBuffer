@@ -1,1 +1,50 @@
+import numpy as np   
 
+class ReplayBuffer(object):
+	def __init__(self, max_size, input_shape, n_actions, discrete=False):
+		self.mem_size = max_size
+		self.input_shape = input_shape
+		self.discrete = discrete
+		self.state_memory = np.zeros((self.mem_size, input_shape))
+		self.new_state_memory = np.zeros((self.mem_size, input_shape)) # keep track of the new states we get after taking an action
+		dtype = np.int8 if self.discrete else np.float32
+		self.action_memory = np.zeros((self.mem_size, n_actions))
+		self.reward_memory = np.zeros(self.mem_size) # keep track of the rewards
+		self.terminal_memory = np.zeros(self.mem_size, dtype=np.float32) # keep  track of the temrinal flags from the environment
+		                                                                 # because when we transition to the terminal state
+		                                                                 # we don't want to take into account the reward at the next state
+
+
+	def store_transition(self, state, action, reward, state_, done):
+		index = self.mem_cntr % self.mem_size  # first available memory
+		                                       # mem_cntr increases incrementally while 
+		                                       # mem_size has a fixed size
+
+		self.state_memory[index] = state
+		self.new_state_memory[index] = state_
+		self.reward_memory[index] = reward
+		self.terminal_memory = 1 - int(done) # this is because the done flag is false when the episode isn't over
+		                                     # you want 1 - int(done),because that way when the episode is over you get 0
+
+		# in case of a discrete action space, you want to get the one-hot encoding of our action
+		if self.discrete:
+			actions = np.zeros(self.action_memory.shape[1])
+			actions[action] = 1.0
+			self.action_memory[index] = actions
+		else:
+			self.action_memory[index] = action
+		self.mem_cntr += 1
+
+
+	# next we need to sample a subset of the memory
+	def sample_buffer(self, batch_size): # increase, don't want to feed a huge memory to your network. Feed a fixed batch_size instead
+		max_mem = min(self.mem_cntr, self.mem_size)
+		batch = np.random.choice(max_mem, batch_size)
+
+		states = self.state_memory[batch]
+		states_ = self.new_state_memory[batch]
+		rewards = self.reward_memory[batch]
+		actions = self.action_memory[batch]
+		terminal = self.terminal_memory[batch]
+
+		return states, actions, rewards, states_, terminal
